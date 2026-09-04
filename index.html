@@ -1,0 +1,1714 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KanjiCraft - 한·일 통합 한자 마스터</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Pretendard:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Pretendard', sans-serif; background-color: #0b0f19; color: #f8fafc; -webkit-tap-highlight-color: transparent; }
+    .kanji-font { font-family: 'Noto Sans JP', sans-serif; }
+    canvas { touch-action: none; }
+    
+    .drag-scroll-container {
+      display: flex;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      cursor: grab;
+      user-select: none;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .drag-scroll-container::-webkit-scrollbar { display: none; }
+    .drag-scroll-container.active { cursor: grabbing; }
+    .drag-item { flex-shrink: 0; white-space: nowrap; }
+
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 20px;
+      width: 20px;
+      border-radius: 50%;
+      background: #6366f1;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex justify-center bg-slate-950">
+
+  <div class="w-full max-w-md bg-[#0d1322] min-h-screen flex flex-col justify-between shadow-2xl border-x border-slate-800/80 relative">
+    
+    <!-- Top Header -->
+    <header id="main-header" class="w-full px-5 py-3.5 flex items-center justify-between border-b border-slate-800/60 bg-[#0d1322]/90 backdrop-blur-md sticky top-0 z-40">
+      <div class="flex items-center space-x-2">
+        <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-black text-white text-base shadow-lg shadow-indigo-600/30">漢</div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-extrabold text-base tracking-wider text-slate-100">KanjiCraft</span>
+            <span id="header-grade-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">초1</span>
+          </div>
+        </div>
+      </div>
+      
+      <div id="header-right-badges" class="flex items-center space-x-2">
+        <div class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold">
+          <i class="fa-solid fa-bullseye text-indigo-400 text-[11px]"></i>
+          <span id="header-daily-goal">하루 3자</span>
+        </div>
+        <div class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold">
+          <i class="fa-solid fa-medal text-amber-400 text-[11px]"></i>
+          <span id="header-medals">0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Dynamic Views -->
+    <main class="flex-1 p-5 pb-24 overflow-y-auto hide-scrollbar">
+      
+      <!-- 0. LEVEL TEST VIEW -->
+      <section id="view-leveltest" class="hidden space-y-5">
+        <div class="text-center pt-2">
+          <span class="text-[11px] font-bold px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">스마트 레벨 진단</span>
+          <h2 class="text-2xl font-black text-white mt-2">나의 한자 시작 단계 찾기</h2>
+          <p class="text-xs text-slate-400 mt-1">초등 및 중등 대표 한자를 테스트하여 딱 맞는 단계를 추천합니다.</p>
+        </div>
+
+        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl text-center space-y-4">
+          <div class="flex justify-between text-xs text-slate-400 font-semibold">
+            <span id="lt-grade-label">초1 수준 진단 중</span>
+            <span id="lt-progress-text">1 / 6</span>
+          </div>
+          <div class="w-full bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
+            <div class="text-slate-500 text-[11px]">이 한자의 올바른 독음(훈/음)은?</div>
+            <div id="lt-kanji-display" class="kanji-font text-6xl font-black text-white my-3">休</div>
+            <div id="lt-example-sentence" class="text-xs text-slate-300 kanji-font">「오늘은 천천히 <span class="text-amber-400 font-bold">休</span> 니다」</div>
+          </div>
+          <div id="lt-choices-container" class="space-y-2 text-left"></div>
+        </div>
+        <div class="text-center">
+          <button onclick="skipLevelTest('초1')" class="text-xs text-slate-500 hover:text-slate-300 underline">진단 건너뛰고 초등 1학년부터 시작하기</button>
+        </div>
+      </section>
+
+      <!-- 1. TAB: 오늘 학습 (목표 한자 카드 리스트) -->
+      <section id="view-learn" class="space-y-4">
+        <!-- 목표 대시보드 카드 -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-lg">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-black text-base shadow-inner">
+              <span id="today-learned-count">0</span>/<span id="today-goal-count">3</span>
+            </div>
+            <div>
+              <div class="text-xs font-bold text-slate-200">오늘의 암기 목표 목록</div>
+              <div class="text-[11px] text-slate-400 mt-0.5" id="today-goal-subtext">외울 한자를 클릭해 쓰기 학습을 시작하세요!</div>
+            </div>
+          </div>
+          <button onclick="openSmartAddModal()" class="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/30 transition">
+            <i class="fa-solid fa-plus text-[10px]"></i> 단어 추가
+          </button>
+        </div>
+
+        <!-- 오늘 배울 한자들 그리드 카드 뷰 -->
+        <div class="space-y-2">
+          <div class="flex justify-between items-center px-1">
+            <span class="text-xs font-bold text-slate-300">오늘 학습할 한자 (<span id="today-batch-count">3</span>자)</span>
+            <button onclick="refreshTodayBatch()" class="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1">
+              <i class="fa-solid fa-arrows-rotate"></i> 새 목록 가져오기
+            </button>
+          </div>
+          <div id="today-kanji-grid" class="grid grid-cols-1 gap-2.5">
+            <!-- 자바스크립트로 한자 목록 동적 렌더링 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. TAB: 오답 풀이 (WRONG NOTE) -->
+      <section id="view-wrong" class="hidden space-y-4">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-black text-white">오답 풀이 & 복습</h2>
+            <p class="text-xs text-slate-400 mt-0.5">틀린 한자를 집중 복습합니다.</p>
+          </div>
+          <span id="wrong-count-badge" class="text-xs font-bold px-2.5 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full">0개</span>
+        </div>
+        
+        <div id="wrong-empty-state" class="bg-slate-900/60 border border-slate-800 rounded-3xl p-8 text-center">
+          <div class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 mx-auto text-xl mb-2"><i class="fa-solid fa-check"></i></div>
+          <p class="text-xs font-bold text-slate-300">오답 기록이 없습니다!</p>
+        </div>
+        <div id="wrong-list-container" class="space-y-3"></div>
+      </section>
+
+      <!-- 3. TAB: 한자 도감 (COLLECTION) -->
+      <section id="view-collection" class="hidden space-y-4">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-black text-white">한자 도감</h2>
+            <p class="text-xs text-slate-400 mt-0.5" id="collection-count-text">총 13,108자 수록</p>
+          </div>
+          <button onclick="openSmartAddModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-lg shadow-indigo-600/30 transition">
+            <i class="fa-solid fa-plus text-[10px]"></i> 단어장 추가
+          </button>
+        </div>
+
+        <div>
+          <input id="collection-search-input" type="text" oninput="onCollectionSearch(this.value)" placeholder="한자, 한글 음/뜻(예: 바를, 정), 일본어 발음 검색..." class="w-full bg-slate-900 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="drag-scroll-container gap-1.5 pb-1 text-xs">
+          <button onclick="selectMainCategory('elementary')" id="cat-elementary" class="drag-item px-4 py-2 rounded-xl font-bold bg-indigo-600 text-white border border-indigo-500 shadow-lg shadow-indigo-600/20 transition">초등 한자</button>
+          <button onclick="selectMainCategory('secondary')" id="cat-secondary" class="drag-item px-4 py-2 rounded-xl font-bold bg-slate-900 text-slate-400 border border-slate-800 transition">중등 한자</button>
+          <button onclick="selectMainCategory('high')" id="cat-high" class="drag-item px-4 py-2 rounded-xl font-bold bg-slate-900 text-slate-400 border border-slate-800 transition">고등 한자</button>
+          <button onclick="selectMainCategory('jlpt')" id="cat-jlpt" class="drag-item px-4 py-2 rounded-xl font-bold bg-slate-900 text-slate-400 border border-slate-800 transition">🎯 JLPT 급수</button>
+          <button onclick="selectMainCategory('more')" id="cat-more" class="drag-item px-4 py-2 rounded-xl font-bold bg-slate-900 text-slate-400 border border-slate-800 transition">기타 / 전체▾</button>
+        </div>
+
+        <div id="sub-tabs-more" class="drag-scroll-container gap-1.5 pb-1 text-xs hidden">
+          <button onclick="selectSubFilter('all')" id="sub-more-all" class="drag-item px-3.5 py-1.5 rounded-xl font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">13,000자 전체</button>
+          <button onclick="selectSubFilter('advanced')" id="sub-more-advanced" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">고난도 한자</button>
+          <button onclick="selectSubFilter('custom')" id="sub-more-custom" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">⭐ 내 단어장</button>
+        </div>
+
+        <div id="sub-tabs-elementary" class="drag-scroll-container gap-1.5 pb-1 text-xs">
+          <button onclick="selectSubFilter('초등전체')" id="sub-elem-all" class="drag-item px-3.5 py-1.5 rounded-xl font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">초등 전체</button>
+          <button onclick="selectSubFilter('초1')" id="sub-elem-초1" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">초1</button>
+          <button onclick="selectSubFilter('초2')" id="sub-elem-초2" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">초2</button>
+          <button onclick="selectSubFilter('초3')" id="sub-elem-초3" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">초3</button>
+          <button onclick="selectSubFilter('초4')" id="sub-elem-초4" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">초4</button>
+          <button onclick="selectSubFilter('초5')" id="sub-elem-초5" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">초5</button>
+          <button onclick="selectSubFilter('초6')" id="sub-elem-초6" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">초6</button>
+        </div>
+
+        <div id="sub-tabs-secondary" class="drag-scroll-container gap-1.5 pb-1 text-xs hidden">
+          <button onclick="selectSubFilter('중등전체')" id="sub-sec-all" class="drag-item px-3.5 py-1.5 rounded-xl font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">중등 전체</button>
+          <button onclick="selectSubFilter('중1')" id="sub-sec-중1" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">중1</button>
+          <button onclick="selectSubFilter('중2')" id="sub-sec-중2" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">중2</button>
+          <button onclick="selectSubFilter('중3')" id="sub-sec-중3" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">중3</button>
+        </div>
+
+        <div id="sub-tabs-jlpt" class="drag-scroll-container gap-1.5 pb-1 text-xs hidden">
+          <button onclick="selectSubFilter('jlpt전체')" id="sub-jlpt-all" class="drag-item px-3.5 py-1.5 rounded-xl font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">JLPT 전체</button>
+          <button onclick="selectSubFilter('N5')" id="sub-jlpt-N5" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">N5 (기초)</button>
+          <button onclick="selectSubFilter('N4')" id="sub-jlpt-N4" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">N4 (초급)</button>
+          <button onclick="selectSubFilter('N3')" id="sub-jlpt-N3" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">N3 (중급)</button>
+          <button onclick="selectSubFilter('N2')" id="sub-jlpt-N2" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">N2 (상급)</button>
+          <button onclick="selectSubFilter('N1')" id="sub-jlpt-N1" class="drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800">N1 (고급)</button>
+        </div>
+        
+        <div id="collection-grid" class="grid grid-cols-2 gap-3 pt-1"></div>
+      </section>
+
+      <!-- 4. TAB: 마이페이지 -->
+      <section id="view-mypage" class="hidden space-y-4">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-xl font-black text-white">마이페이지</h2>
+            <p class="text-xs text-slate-400 mt-0.5">나의 학습 진도와 계정을 관리합니다.</p>
+          </div>
+          <button id="btn-auth-action" onclick="handleAuthButtonClick()" class="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 text-xs font-bold transition flex items-center gap-1.5">
+            <i class="fa-solid fa-user-plus"></i> <span id="auth-action-label">로그인 / 회원가입</span>
+          </button>
+        </div>
+
+        <div class="bg-gradient-to-br from-indigo-950/80 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 shadow-xl space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center font-black text-xl text-white shadow-lg shadow-indigo-600/40">漢</div>
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-base font-black text-white" id="mypage-user-name">게스트 러너</span>
+                  <span id="mypage-grade-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-500/40">초1</span>
+                </div>
+                <div class="text-xs text-slate-400 mt-0.5" id="mypage-mastered-text">외운 한자: 0개</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-amber-400 text-sm font-bold flex items-center gap-1">
+                <i class="fa-solid fa-medal"></i> <span id="mypage-medals">0</span>개
+              </div>
+              <div class="text-[10px] text-slate-500">진급 메달</div>
+            </div>
+          </div>
+
+          <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-3 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-slate-200" id="mypage-test-title">초1 승급 시험</div>
+              <div class="text-[11px] text-slate-400">90% 이상 득점 시 다음 단계로 진급</div>
+            </div>
+            <button onclick="startPromotionTestModal()" class="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1">
+              <i class="fa-solid fa-graduation-cap"></i> 시험 응시
+            </button>
+          </div>
+        </div>
+
+        <!-- 일일 목표 설정 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+          <div class="flex justify-between items-center">
+            <div>
+              <h3 class="text-sm font-bold text-white">일일 암기 목표 설정</h3>
+              <p class="text-xs text-slate-400">하루에 외울 한자 개수 (1 ~ 500자)</p>
+            </div>
+            <div class="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1">
+              <input id="custom-goal-input" type="number" min="1" max="500" value="3" onchange="onCustomGoalInputChange(this.value)" class="w-12 bg-transparent text-center text-sm font-black text-indigo-400 focus:outline-none">
+              <span class="text-xs text-slate-400 font-semibold">자</span>
+            </div>
+          </div>
+
+          <div class="space-y-1.5">
+            <input id="custom-goal-slider" type="range" min="1" max="500" value="3" oninput="onCustomGoalSliderChange(this.value)" class="w-full h-2 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+            <div class="flex justify-between text-[10px] text-slate-500 font-semibold px-0.5">
+              <span>1자</span>
+              <span>100자</span>
+              <span>250자</span>
+              <span>최대 500자</span>
+            </div>
+          </div>
+
+          <div class="pt-1">
+            <div class="text-[11px] text-slate-500 font-bold mb-2">빠른 선택 프리셋</div>
+            <div class="grid grid-cols-5 gap-1.5">
+              <button onclick="setDailyGoal(5)" id="btn-preset-5" class="py-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">5자</button>
+              <button onclick="setDailyGoal(10)" id="btn-preset-10" class="py-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">10자</button>
+              <button onclick="setDailyGoal(20)" id="btn-preset-20" class="py-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">20자</button>
+              <button onclick="setDailyGoal(50)" id="btn-preset-50" class="py-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">50자</button>
+              <button onclick="setDailyGoal(100)" id="btn-preset-100" class="py-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">100자</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 학습 단계 직접 변경 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3">
+          <div class="flex justify-between items-center">
+            <div>
+              <h3 class="text-sm font-bold text-white">학습 단계 직접 변경</h3>
+              <p class="text-xs text-slate-400">초등·중등·고등 과정 선택</p>
+            </div>
+            <button onclick="startLevelTest()" class="text-xs text-indigo-400 font-bold hover:underline">
+              <i class="fa-solid fa-chart-simple"></i> 진단 다시받기
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-3 gap-2 pt-1">
+            <button onclick="setManualGrade('초1')" id="btn-grade-초1" class="py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">초1 과정</button>
+            <button onclick="setManualGrade('초2')" id="btn-grade-초2" class="py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">초2 과정</button>
+            <button onclick="setManualGrade('초3')" id="btn-grade-초3" class="py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">초3 과정</button>
+            <button onclick="setManualGrade('초4')" id="btn-grade-초4" class="py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">초4 과정</button>
+            <button onclick="setManualGrade('초5')" id="btn-grade-초5" class="py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">초5 과정</button>
+            <button onclick="setManualGrade('초6')" id="btn-grade-초6" class="py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">초6 과정</button>
+            <button onclick="setManualGrade('중1')" id="btn-grade-중1" class="py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">중1 과정</button>
+            <button onclick="setManualGrade('중2')" id="btn-grade-중2" class="py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">중2 과정</button>
+            <button onclick="setManualGrade('중3')" id="btn-grade-중3" class="py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">중3 과정</button>
+            <button onclick="setManualGrade('고등')" id="btn-grade-고등" class="col-span-3 py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition">고등 한자 과정 (상용·인명용 860자)</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. PROMOTION TEST VIEW -->
+      <section id="view-test" class="hidden space-y-4">
+        <div class="bg-gradient-to-r from-indigo-950/60 to-slate-900 border border-indigo-500/30 rounded-2xl p-4 flex items-center justify-between">
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="test-current-grade" class="text-base font-extrabold text-white">초1 승급 시험</span>
+              <span class="text-xs text-amber-400 font-bold flex items-center gap-1">
+                <i class="fa-solid fa-medal"></i> 금메달 도전
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">90% 이상 득점 시 다음 단계로 진급합니다.</p>
+          </div>
+          <button onclick="switchTab('mypage')" class="text-slate-400 hover:text-white text-xs"><i class="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+
+        <div id="test-active-box" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+          <div class="flex justify-between items-center mb-1">
+            <span id="test-source-badge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">현재 과정 문제</span>
+            <span id="test-q-progress" class="text-xs text-slate-400 font-semibold">1 / 5</span>
+          </div>
+          <h3 id="test-prompt-title" class="text-2xl font-black text-white mt-1">쉴 휴</h3>
+          <p id="test-prompt-context" class="text-xs text-slate-300 mt-1 kanji-font">「오늘은 천천히 <span class="text-amber-400 font-bold underline">？</span> 니다」</p>
+        </div>
+
+        <div class="relative w-full aspect-square max-w-[300px] mx-auto bg-slate-900 border-2 border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center">
+          <div class="absolute inset-0 pointer-events-none flex items-center justify-center"><div class="w-full h-[1px] border-b border-dashed border-slate-800"></div></div>
+          <div class="absolute inset-0 pointer-events-none flex items-center justify-center"><div class="h-full w-[1px] border-r border-dashed border-slate-800"></div></div>
+          <canvas id="testCanvas" width="300" height="300" class="relative z-10 w-full h-full cursor-crosshair"></canvas>
+
+          <div id="test-loading" class="absolute inset-0 z-20 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center hidden">
+            <div class="w-8 h-8 border-3 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-2"></div>
+            <span class="text-xs text-indigo-300 font-semibold">AI 필기 판독 중...</span>
+          </div>
+
+          <div id="test-overlay" class="absolute inset-0 z-30 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-5 hidden">
+            <div id="test-overlay-icon" class="w-12 h-12 rounded-full flex items-center justify-center text-2xl mb-1"></div>
+            <h4 id="test-overlay-title" class="text-lg font-bold text-white mb-0.5">정답입니다!</h4>
+            <p id="test-overlay-sub" class="text-xs text-slate-400 mb-3">인식: <b id="test-recognized-char" class="text-indigo-400 kanji-font">休</b> (정답: <b id="test-target-char" class="text-emerald-400 kanji-font">休</b>)</p>
+            <button onclick="nextTestQuestion()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition">다음 문제</button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between max-w-[300px] mx-auto">
+          <button onclick="clearTestCanvas()" class="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-eraser text-slate-400"></i> 지우기
+          </button>
+          <button onclick="gradeTestAnswer()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 active:scale-95 transition">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> AI 자동 채점
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bottom Nav -->
+    <nav id="main-nav" class="w-full h-20 bg-slate-900/95 border-t border-slate-800/80 backdrop-blur-lg fixed bottom-0 max-w-md flex items-center justify-around px-2 z-50">
+      <button onclick="switchTab('learn')" id="nav-learn" class="flex flex-col items-center gap-1 text-indigo-400 font-bold transition">
+        <i class="fa-solid fa-pen-nib text-base"></i>
+        <span class="text-[10px]">오늘 학습</span>
+      </button>
+      <button onclick="switchTab('wrong')" id="nav-wrong" class="flex flex-col items-center gap-1 text-slate-500 hover:text-slate-300 font-medium transition">
+        <i class="fa-solid fa-triangle-exclamation text-base"></i>
+        <span class="text-[10px]">오답 풀이</span>
+      </button>
+      <button onclick="switchTab('collection')" id="nav-collection" class="flex flex-col items-center gap-1 text-slate-500 hover:text-slate-300 font-medium transition">
+        <i class="fa-solid fa-book-bookmark text-base"></i>
+        <span class="text-[10px]">한자 도감</span>
+      </button>
+      <button onclick="switchTab('mypage')" id="nav-mypage" class="flex flex-col items-center gap-1 text-slate-500 hover:text-slate-300 font-medium transition">
+        <i class="fa-solid fa-user-gear text-base"></i>
+        <span class="text-[10px]">마이페이지</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- 🌟 MODAL: 자유 쓰기 & 즉시 암기완료(학습종료) 지원 모달 -->
+  <div id="modal-practice-detail" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-3.5 max-h-[95vh] overflow-y-auto hide-scrollbar">
+      
+      <!-- 모달 상단 헤더 -->
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span id="practice-grade-tag" class="text-xs font-bold px-2.5 py-0.5 bg-indigo-950 text-indigo-300 border border-indigo-500/40 rounded-full">초1 한자</span>
+          <span id="practice-strokes" class="text-xs font-semibold px-2 py-0.5 bg-slate-800 text-slate-400 rounded-full">6획</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="playPracticeSound()" title="일본어 발음 듣기" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-300 hover:text-indigo-400 border border-slate-700 transition">
+            <i class="fa-solid fa-volume-high text-xs"></i>
+          </button>
+          <button onclick="closePracticeModal()" title="닫기" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition">
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- 한자 기본 정보 -->
+      <div class="text-center py-0.5">
+        <div id="practice-char" class="kanji-font text-6xl font-black text-white drop-shadow-md">休</div>
+        <div id="practice-korean" class="text-base font-bold text-slate-200 mt-0.5">쉴 <span class="text-indigo-400">휴</span></div>
+      </div>
+
+      <!-- 부수 조립 공식 -->
+      <div class="bg-slate-950/70 border border-slate-800 p-2.5 rounded-2xl text-[11px] text-slate-300">
+        <div class="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">💡 부수 조립 공식 / 힌트</div>
+        <div id="practice-formula" class="font-medium leading-relaxed">亻(사람) + 木(나무) = 사람이 나무에 기대어 쉬다</div>
+      </div>
+
+      <!-- 음독 / 훈독 -->
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="p-2 rounded-xl bg-cyan-950/40 border border-cyan-500/30">
+          <span class="text-[9px] font-bold text-cyan-400 uppercase">음독 (音)</span>
+          <div id="practice-onyomi" class="text-xs font-bold text-cyan-200 kanji-font mt-0.5">キュウ</div>
+        </div>
+        <div class="p-2 rounded-xl bg-amber-950/40 border border-amber-500/30">
+          <span class="text-[9px] font-bold text-amber-400 uppercase">훈독 (訓)</span>
+          <div id="practice-kunyomi" class="text-xs font-bold text-amber-200 kanji-font mt-0.5">やす•む</div>
+        </div>
+      </div>
+
+      <!-- 🌟 쓰기 진행 트래커 (자유 카운트 + 리셋 버튼) -->
+      <div class="bg-slate-950 border border-indigo-500/30 rounded-2xl p-3 space-y-2">
+        <div class="flex justify-between items-center text-xs">
+          <span class="font-bold text-slate-300 flex items-center gap-1.5">
+            <i class="fa-solid fa-pencil text-indigo-400"></i> 쓰기 연습 트래커
+          </span>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-indigo-300"><span id="write-count-current" class="text-sm font-black text-indigo-400">0</span>회 연습</span>
+            <button onclick="resetPracticeWriteCount()" title="카운트 초기화" class="w-5 h-5 rounded-md bg-slate-800 text-slate-400 hover:text-white text-[10px] flex items-center justify-center">
+              <i class="fa-solid fa-rotate-left"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 1~10 동그라미 (시각적 피드백) -->
+        <div id="write-dot-container" class="flex justify-between items-center px-0.5">
+          <!-- JS로 동적 생성 -->
+        </div>
+      </div>
+
+      <!-- 쓰기 연습 캔버스 -->
+      <div class="relative w-full aspect-square max-w-[240px] mx-auto bg-slate-950 border-2 border-slate-800 rounded-2xl overflow-hidden shadow-inner flex items-center justify-center">
+        <div class="absolute inset-0 pointer-events-none flex items-center justify-center"><div class="w-full h-[1px] border-b border-dashed border-slate-800"></div></div>
+        <div class="absolute inset-0 pointer-events-none flex items-center justify-center"><div class="h-full w-[1px] border-r border-dashed border-slate-800"></div></div>
+        <div id="practice-watermark" class="absolute pointer-events-none kanji-font text-[150px] font-bold text-slate-800/60 select-none">休</div>
+        <canvas id="practiceCanvas" width="240" height="240" class="relative z-10 w-full h-full cursor-crosshair"></canvas>
+      </div>
+
+      <!-- 🌟 컨트롤 버튼 영역 (지우기 / 1회 쓰기 / 언제든 암기완료) -->
+      <div class="space-y-2 pt-0.5">
+        <div class="flex items-center gap-2">
+          <button onclick="clearPracticeCanvas()" title="지우개" class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition">
+            <i class="fa-solid fa-eraser text-slate-400"></i>
+          </button>
+          <button onclick="countUpPracticeWrite()" id="btn-count-write" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> <span>1회 쓰기 카운트 (+지우기)</span>
+          </button>
+        </div>
+
+        <!-- 🌟 언제든 누를 수 있는 암기 완료(학습 종료) 버튼 -->
+        <button id="btn-finish-practice" onclick="markPracticeAsMastered()" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5 active:scale-98">
+          <i class="fa-solid fa-circle-check text-sm"></i> <span id="btn-finish-text">오늘 암기 완료 (학습 종료)</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: 로그인 & 회원가입 팝업 모달 -->
+  <div id="modal-auth" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-indigo-600/30">
+            <i class="fa-solid fa-user-lock"></i>
+          </div>
+          <h3 id="auth-modal-title" class="text-base font-bold text-white">KanjiCraft 로그인</h3>
+        </div>
+        <button onclick="closeAuthModal()" class="text-slate-400 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs font-bold">
+        <button onclick="toggleAuthMode('login')" id="tab-auth-login" class="py-2 rounded-xl bg-indigo-600 text-white transition">로그인</button>
+        <button onclick="toggleAuthMode('register')" id="tab-auth-register" class="py-2 rounded-xl text-slate-400 hover:text-white transition">회원가입</button>
+      </div>
+
+      <div class="space-y-3 pt-1">
+        <div id="field-auth-nickname" class="space-y-1 hidden">
+          <label class="text-xs text-slate-400">닉네임</label>
+          <input id="auth-nickname" type="text" placeholder="예: 한자왕초보" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">이메일 주소 (아이디)</label>
+          <input id="auth-email" type="email" placeholder="example@email.com" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">비밀번호</label>
+          <input id="auth-password" type="password" placeholder="비밀번호 입력" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div id="auth-error-msg" class="text-xs text-rose-400 font-medium hidden"></div>
+
+        <button onclick="submitAuthForm()" id="btn-auth-submit" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-right-to-bracket"></i> <span>로그인</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: 온보딩 진단 -->
+  <div id="modal-onboarding" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl space-y-5 text-center">
+      <div class="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-2xl font-black mx-auto shadow-lg shadow-indigo-600/40">
+        漢
+      </div>
+      <div>
+        <h2 class="text-xl font-black text-white">환영합니다!</h2>
+        <p class="text-xs text-slate-400 mt-1">어떤 방식으로 한자 학습을 시작하시겠어요?</p>
+      </div>
+
+      <div class="space-y-2.5">
+        <button onclick="startOnboardingDiagnostic()" class="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-extrabold flex items-center justify-between shadow-lg shadow-indigo-600/30 transition">
+          <div class="flex items-center gap-2.5 text-left">
+            <i class="fa-solid fa-chart-simple text-sm"></i>
+            <div>
+              <div>스마트 레벨 진단받기</div>
+              <div class="text-[10px] text-indigo-200 font-normal">간단한 퀴즈로 딱 맞는 단계 추천</div>
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
+
+        <div class="relative py-2">
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-800"></div></div>
+          <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-slate-900 px-2 text-slate-500 font-bold">또는 직접 단계 선택</span></div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="selectInitialGrade('초1')" class="py-2 rounded-xl border border-slate-800 bg-slate-950 hover:border-indigo-500 text-slate-200 text-xs font-bold transition">초1 시작</button>
+          <button onclick="selectInitialGrade('초2')" class="py-2 rounded-xl border border-slate-800 bg-slate-950 hover:border-indigo-500 text-slate-200 text-xs font-bold transition">초2 시작</button>
+          <button onclick="selectInitialGrade('초3')" class="py-2 rounded-xl border border-slate-800 bg-slate-950 hover:border-indigo-500 text-slate-200 text-xs font-bold transition">초3 시작</button>
+          <button onclick="selectInitialGrade('중1')" class="py-2 rounded-xl border border-slate-800 bg-slate-950 hover:border-indigo-500 text-slate-200 text-xs font-bold transition">중1 시작</button>
+          <button onclick="selectInitialGrade('중2')" class="py-2 rounded-xl border border-slate-800 bg-slate-950 hover:border-indigo-500 text-slate-200 text-xs font-bold transition">중2 시작</button>
+          <button onclick="selectInitialGrade('중3')" class="py-2 rounded-xl border border-slate-800 bg-slate-950 hover:border-indigo-500 text-slate-200 text-xs font-bold transition">중3 시작</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: JIS 사전 검색 -->
+  <div id="modal-smart-add" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto hide-scrollbar">
+      <div class="flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-400 text-xs">
+            <i class="fa-solid fa-server"></i>
+          </div>
+          <h3 class="text-base font-bold text-white">JIS 마스터 사전 검색</h3>
+        </div>
+        <button onclick="closeSmartAddModal()" class="text-slate-400 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-semibold text-slate-300">한자 1글자 검색 (JIS 13,000자 DB 연동)</label>
+        <div class="flex gap-2">
+          <input id="quick-search-input" type="text" placeholder="예: 正, 姊, 羅, 鬱, 龍, 愛..." maxlength="1" class="w-20 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-center text-xl font-black kanji-font text-white focus:outline-none focus:border-indigo-500">
+          <button onclick="searchKanjiFromServer()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30 transition">
+            <i class="fa-solid fa-magnifying-glass"></i> 사전 정보 가져오기
+          </button>
+        </div>
+      </div>
+
+      <div id="search-status-box" class="hidden p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-center">
+        <span id="search-status-text" class="text-xs font-medium"></span>
+      </div>
+
+      <div class="space-y-2.5 text-xs pt-1 border-t border-slate-800">
+        <div class="flex justify-between items-center">
+          <span class="text-[11px] text-slate-400 font-bold uppercase">사전 매핑 결과</span>
+          <span id="source-tag" class="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">JIS Master DB</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-slate-400 block mb-1">한국어 뜻 (훈)</label>
+            <input id="input-mean" type="text" placeholder="예: 바를" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-bold focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="text-slate-400 block mb-1">한국어 음 (음)</label>
+            <input id="input-sound" type="text" placeholder="예: 정" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-indigo-300 font-bold focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-cyan-400 block mb-1">일본어 음독 (音)</label>
+            <input id="input-onyomi" type="text" placeholder="예: セイ / ショウ" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-cyan-200 font-medium kanji-font focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <label class="text-amber-400 block mb-1">일본어 훈독 (訓)</label>
+            <input id="input-kunyomi" type="text" placeholder="예: 다만.しい / まさ" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-amber-200 font-medium kanji-font focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="text-slate-400 block mb-1">획수 및 부수 정보</label>
+          <input id="input-strokes" type="text" placeholder="예: 5획 • JLPT N4" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="text-slate-400 block mb-1">부수 조립 공식 / 암기 힌트</label>
+          <input id="input-formula" type="text" placeholder="예: 한국어 훈음: 바를 정" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div>
+          <label class="text-slate-400 block mb-1">실전 문맥 퀴즈 예문</label>
+          <input id="input-context" type="text" placeholder="예: 「【 ？ 】」 단어 예문" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+        </div>
+      </div>
+
+      <button onclick="saveSmartKanji()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-1.5">
+        <i class="fa-solid fa-plus"></i> 나만의 단어장에 저장하기
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const GRADE_ORDER = ["초1", "초2", "초3", "초4", "초5", "초6", "중1", "중2", "중3", "고등"];
+
+    let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+
+    let kanjiList = [];
+    let customKanjiList = JSON.parse(localStorage.getItem('customKanjiDB') || '[]');
+    let userCurrentGrade = localStorage.getItem('userCurrentGrade_str') || '초1';
+    let dailyGoal = parseInt(localStorage.getItem('userDailyGoal') || '3');
+    let todayLearnedList = JSON.parse(localStorage.getItem('todayLearnedList') || '[]');
+    let goldMedals = parseInt(localStorage.getItem('goldMedals') || '0');
+    let isInitialized = localStorage.getItem('isAppInitialized') === 'true';
+
+    let todayBatchKanji = [];
+    let currentPracticeKanji = null;
+    let practiceWriteCount = 0;
+
+    let testQuestions = [], currentTestQIndex = 0, testScore = 0;
+    let authMode = 'login';
+    
+    let currentMainCategory = 'elementary';
+    let currentSubFilter = '초등전체';
+    let searchQuery = '';
+
+    function enableDragScroll(container) {
+      if (!container) return;
+      let isDown = false, startX, scrollLeft, hasMoved = false;
+
+      container.addEventListener('mousedown', (e) => {
+        isDown = true; hasMoved = false;
+        container.classList.add('active');
+        startX = e.pageX - container.offsetLeft;
+        scrollLeft = container.scrollLeft;
+      });
+
+      container.addEventListener('mouseleave', () => { isDown = false; container.classList.remove('active'); });
+      container.addEventListener('mouseup', () => { isDown = false; container.classList.remove('active'); });
+      container.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const x = e.pageX - container.offsetLeft;
+        const walk = (x - startX) * 1.5;
+        if (Math.abs(walk) > 5) hasMoved = true;
+        container.scrollLeft = scrollLeft - walk;
+      });
+
+      container.addEventListener('click', (e) => {
+        if (hasMoved) { e.stopPropagation(); e.preventDefault(); }
+      }, true);
+    }
+
+    function initAllDragScrolls() {
+      document.querySelectorAll('.drag-scroll-container').forEach(enableDragScroll);
+    }
+
+    function isValidEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function saveState() {
+      localStorage.setItem('customKanjiDB', JSON.stringify(customKanjiList));
+      localStorage.setItem('userCurrentGrade_str', userCurrentGrade);
+      localStorage.setItem('userDailyGoal', dailyGoal.toString());
+      localStorage.setItem('todayLearnedList', JSON.stringify(todayLearnedList));
+      localStorage.setItem('goldMedals', goldMedals.toString());
+      localStorage.setItem('isAppInitialized', 'true');
+      updateHeaderBadges();
+      updateMypageView();
+
+      if (currentUser && currentUser.email) {
+        fetch('http://localhost:3000/api/user/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: currentUser.email,
+            userCurrentGrade,
+            dailyGoal,
+            todayLearnedList,
+            goldMedals,
+            customKanjiList,
+            wrongList: kanjiList.filter(k => k.wrongCount > 0)
+          })
+        }).catch(err => console.warn("클라우드 동기화 대기:", err));
+      }
+    }
+
+    function handleAuthButtonClick() {
+      if (currentUser) {
+        if (confirm(`「${currentUser.nickname}」님, 로그아웃 하시겠습니까?`)) {
+          currentUser = null;
+          localStorage.removeItem('currentUser');
+          alert("로그아웃 되었습니다.");
+          updateMypageView();
+        }
+      } else {
+        openAuthModal('login');
+      }
+    }
+
+    function openAuthModal(mode = 'login') {
+      authMode = mode;
+      toggleAuthMode(mode);
+      document.getElementById('modal-auth').classList.remove('hidden');
+      document.getElementById('auth-error-msg').classList.add('hidden');
+    }
+
+    function closeAuthModal() {
+      document.getElementById('modal-auth').classList.add('hidden');
+    }
+
+    function toggleAuthMode(mode) {
+      authMode = mode;
+      const title = document.getElementById('auth-modal-title');
+      const tabLogin = document.getElementById('tab-auth-login');
+      const tabRegister = document.getElementById('tab-auth-register');
+      const nickField = document.getElementById('field-auth-nickname');
+      const submitBtn = document.getElementById('btn-auth-submit');
+      const errorMsg = document.getElementById('auth-error-msg');
+
+      errorMsg.classList.add('hidden');
+
+      if (mode === 'login') {
+        title.innerText = 'KanjiCraft 로그인';
+        tabLogin.className = 'py-2 rounded-xl bg-indigo-600 text-white transition';
+        tabRegister.className = 'py-2 rounded-xl text-slate-400 hover:text-white transition';
+        nickField.classList.add('hidden');
+        submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> <span>로그인</span>';
+      } else {
+        title.innerText = 'KanjiCraft 회원가입';
+        tabRegister.className = 'py-2 rounded-xl bg-indigo-600 text-white transition';
+        tabLogin.className = 'py-2 rounded-xl text-slate-400 hover:text-white transition';
+        nickField.classList.remove('hidden');
+        submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> <span>회원가입 완료</span>';
+      }
+    }
+
+    async function submitAuthForm() {
+      const email = document.getElementById('auth-email').value.trim().toLowerCase();
+      const password = document.getElementById('auth-password').value.trim();
+      const nickname = document.getElementById('auth-nickname').value.trim();
+      const errorMsg = document.getElementById('auth-error-msg');
+
+      if (!email || !password || (authMode === 'register' && !nickname)) {
+        errorMsg.innerText = '모든 필수 항목을 입력해주세요.';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+
+      if (!isValidEmail(email)) {
+        errorMsg.innerText = '올바른 이메일 형식을 입력해주세요 (예: user@example.com).';
+        errorMsg.classList.remove('hidden');
+        return;
+      }
+
+      const endpoint = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const payload = authMode === 'register' ? { email, password, nickname } : { email, password };
+
+      try {
+        const res = await fetch(`http://localhost:3000${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+          errorMsg.innerText = data.message;
+          errorMsg.classList.remove('hidden');
+          return;
+        }
+
+        currentUser = data.user;
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+        if (currentUser.userCurrentGrade) userCurrentGrade = currentUser.userCurrentGrade;
+        if (currentUser.dailyGoal) dailyGoal = currentUser.dailyGoal;
+        if (currentUser.todayLearnedList) todayLearnedList = currentUser.todayLearnedList;
+        if (currentUser.goldMedals) goldMedals = currentUser.goldMedals;
+        if (currentUser.customKanjiList) customKanjiList = currentUser.customKanjiList;
+
+        saveState();
+        closeAuthModal();
+        alert(`반갑습니다, ${currentUser.nickname}님! (${currentUser.email})`);
+        updateMypageView();
+        refreshTodayBatch();
+
+      } catch (err) {
+        errorMsg.innerText = '서버와의 통신에 실패했습니다. (node server.js 확인)';
+        errorMsg.classList.remove('hidden');
+      }
+    }
+
+    // DB 로드
+    async function loadMasterDB() {
+      const countEl = document.getElementById('collection-count-text');
+      if (countEl) countEl.innerText = "한자 데이터베이스 동기화 중...";
+
+      let loadedData = null;
+
+      try {
+        const res = await fetch('http://localhost:3000/api/kanji-all');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) loadedData = json.data;
+        }
+      } catch (e) {}
+
+      if (!loadedData) {
+        try {
+          const resLocal = await fetch('./jis_kanji_master_db.json');
+          if (resLocal.ok) {
+            const rawMap = await resLocal.json();
+            loadedData = Object.values(rawMap).map((item, idx) => ({
+              id: idx + 1,
+              char: item.char,
+              schoolLevel: item.schoolLevel || '고난도',
+              jlpt: item.jlpt || null,
+              strokes: item.strokes || '',
+              koreanMean: item.koreanMean || '뜻 직접입력',
+              koreanSound: item.koreanSound || '',
+              onyomi: item.onyomi || [],
+              kunyomi: item.kunyomi || [],
+              formula: item.formula || '',
+              quizContext: `「${item.char}」 단어 예문`,
+              wrongCount: 0,
+              mastered: false
+            }));
+          }
+        } catch (e) {
+          console.error("로컬 로드 실패:", e);
+        }
+      }
+
+      if (loadedData && loadedData.length > 0) {
+        kanjiList = [...loadedData, ...customKanjiList];
+        if (countEl) countEl.innerText = `총 ${kanjiList.length.toLocaleString()}자 수록`;
+      }
+
+      renderCollectionGrid();
+      refreshTodayBatch();
+    }
+
+    function updateHeaderBadges() {
+      document.getElementById('header-grade-badge').innerText = userCurrentGrade;
+      document.getElementById('header-daily-goal').innerText = `하루 ${dailyGoal}자`;
+      document.getElementById('header-medals').innerText = goldMedals;
+    }
+
+    function formatReadings(reading) {
+      if (!reading) return '-';
+      if (Array.isArray(reading)) return reading.length > 0 ? reading.join(' / ') : '-';
+      return reading;
+    }
+
+    function switchTab(tabId) {
+      const isTestingMode = (tabId === 'leveltest' || tabId === 'test');
+
+      const nav = document.getElementById('main-nav');
+      if (isTestingMode) nav.classList.add('hidden');
+      else nav.classList.remove('hidden');
+
+      const headerBadges = document.getElementById('header-right-badges');
+      const headerGradeBadge = document.getElementById('header-grade-badge');
+      if (isTestingMode) {
+        headerBadges.classList.add('hidden');
+        headerGradeBadge.classList.add('hidden');
+      } else {
+        headerBadges.classList.remove('hidden');
+        headerGradeBadge.classList.remove('hidden');
+      }
+
+      ['learn', 'wrong', 'collection', 'mypage', 'test', 'leveltest'].forEach(tab => {
+        const view = document.getElementById(`view-${tab}`);
+        const navBtn = document.getElementById(`nav-${tab}`);
+        if (tab === tabId) {
+          view.classList.remove('hidden');
+          if (navBtn) navBtn.className = 'flex flex-col items-center gap-1 text-indigo-400 font-bold transition';
+        } else {
+          view.classList.add('hidden');
+          if (navBtn) navBtn.className = 'flex flex-col items-center gap-1 text-slate-500 hover:text-slate-300 font-medium transition';
+        }
+      });
+
+      if (tabId === 'learn') renderTodayLearnGrid();
+      if (tabId === 'wrong') renderWrongNote();
+      if (tabId === 'collection') renderCollectionGrid();
+      if (tabId === 'mypage') updateMypageView();
+    }
+
+    function checkAppInit() {
+      if (!isInitialized) {
+        document.getElementById('modal-onboarding').classList.remove('hidden');
+      } else {
+        switchTab('learn');
+      }
+    }
+
+    function startOnboardingDiagnostic() {
+      document.getElementById('modal-onboarding').classList.add('hidden');
+      startLevelTest();
+    }
+
+    function selectInitialGrade(grade) {
+      userCurrentGrade = grade;
+      saveState();
+      document.getElementById('modal-onboarding').classList.add('hidden');
+      alert(`🎯 [${grade} 과정]으로 학습을 시작합니다!`);
+      switchTab('learn');
+    }
+
+    function updateMypageView() {
+      document.getElementById('mypage-grade-badge').innerText = userCurrentGrade;
+      document.getElementById('mypage-medals').innerText = goldMedals;
+      document.getElementById('mypage-test-title').innerText = `${userCurrentGrade} 승급 시험`;
+      const masteredCount = kanjiList.filter(k => k.mastered).length;
+      document.getElementById('mypage-mastered-text').innerText = `외운 한자: ${masteredCount}개 / 총 ${kanjiList.length}개`;
+
+      const userNameEl = document.getElementById('mypage-user-name');
+      const authLabel = document.getElementById('auth-action-label');
+      if (currentUser) {
+        userNameEl.innerText = `${currentUser.nickname} (${currentUser.email})`;
+        authLabel.innerText = '로그아웃';
+      } else {
+        userNameEl.innerText = '게스트 러너';
+        authLabel.innerText = '로그인 / 회원가입';
+      }
+
+      const goalSlider = document.getElementById('custom-goal-slider');
+      const goalInput = document.getElementById('custom-goal-input');
+      if (goalSlider) goalSlider.value = dailyGoal;
+      if (goalInput) goalInput.value = dailyGoal;
+
+      [5, 10, 20, 50, 100].forEach(cnt => {
+        const btn = document.getElementById(`btn-preset-${cnt}`);
+        if (btn) {
+          if (cnt === dailyGoal) {
+            btn.className = "py-1.5 rounded-lg border border-indigo-500 bg-indigo-950/60 text-indigo-200 text-xs font-bold transition";
+          } else {
+            btn.className = "py-1.5 rounded-lg border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition";
+          }
+        }
+      });
+
+      GRADE_ORDER.forEach(g => {
+        const btn = document.getElementById(`btn-grade-${g}`);
+        if (btn) {
+          if (g === userCurrentGrade) {
+            btn.className = "py-2.5 rounded-xl border border-indigo-500 bg-indigo-950/60 text-indigo-200 text-xs font-bold transition" + (g === '고등' ? ' col-span-3' : '');
+          } else {
+            btn.className = "py-2.5 rounded-xl border border-slate-800 bg-slate-950 text-slate-300 text-xs font-bold hover:border-indigo-500 transition" + (g === '고등' ? ' col-span-3' : '');
+          }
+        }
+      });
+    }
+
+    function onCustomGoalSliderChange(val) {
+      const num = parseInt(val) || 1;
+      dailyGoal = Math.min(500, Math.max(1, num));
+      document.getElementById('custom-goal-input').value = dailyGoal;
+      saveState();
+      refreshTodayBatch();
+    }
+
+    function onCustomGoalInputChange(val) {
+      let num = parseInt(val) || 1;
+      if (num < 1) num = 1;
+      if (num > 500) num = 500;
+      dailyGoal = num;
+      document.getElementById('custom-goal-slider').value = dailyGoal;
+      document.getElementById('custom-goal-input').value = dailyGoal;
+      saveState();
+      refreshTodayBatch();
+    }
+
+    function setDailyGoal(count) {
+      dailyGoal = Math.min(500, Math.max(1, count));
+      saveState();
+      refreshTodayBatch();
+    }
+
+    function setManualGrade(grade) {
+      userCurrentGrade = grade;
+      saveState();
+      alert(`🎯 학습 진도를 [${grade} 과정]으로 변경했습니다.`);
+      refreshTodayBatch();
+    }
+
+    function getAvailableLearningKanji() {
+      if (!kanjiList || kanjiList.length === 0) return [];
+      
+      if (userCurrentGrade === '고등') {
+        const highKanji = kanjiList.filter(k => k.schoolLevel === '고등/인명용' || k.schoolLevel === '인명/교양' || k.schoolLevel === 'custom');
+        return highKanji.length > 0 ? highKanji : kanjiList;
+      }
+
+      const gradeKanji = kanjiList.filter(k => k.schoolLevel === userCurrentGrade || k.schoolLevel === 'custom');
+      return gradeKanji.length > 0 ? gradeKanji : kanjiList;
+    }
+
+    function refreshTodayBatch() {
+      const pool = getAvailableLearningKanji();
+      if (!pool || pool.length === 0) return;
+
+      const unmastered = pool.filter(k => !todayLearnedList.includes(k.id));
+      if (unmastered.length >= dailyGoal) {
+        todayBatchKanji = unmastered.slice(0, dailyGoal);
+      } else {
+        const remaining = dailyGoal - unmastered.length;
+        const masteredPart = pool.filter(k => todayLearnedList.includes(k.id)).slice(0, remaining);
+        todayBatchKanji = [...unmastered, ...masteredPart];
+      }
+
+      renderTodayLearnGrid();
+    }
+
+    function renderTodayLearnGrid() {
+      const container = document.getElementById('today-kanji-grid');
+      const learnedCountEl = document.getElementById('today-learned-count');
+      const goalCountEl = document.getElementById('today-goal-count');
+      const subtextEl = document.getElementById('today-goal-subtext');
+      const batchCountEl = document.getElementById('today-batch-count');
+
+      learnedCountEl.innerText = todayLearnedList.length;
+      goalCountEl.innerText = dailyGoal;
+      batchCountEl.innerText = todayBatchKanji.length;
+
+      const remain = Math.max(0, dailyGoal - todayLearnedList.length);
+      subtextEl.innerText = remain === 0 ? '🎉 오늘 설정한 목표를 모두 달성했습니다!' : `오늘 ${dailyGoal}개 완료까지 ${remain}개 남음`;
+
+      if (todayBatchKanji.length === 0) {
+        container.innerHTML = `<div class="p-8 text-center text-xs text-slate-500">학습할 한자를 불러오는 중입니다...</div>`;
+        return;
+      }
+
+      container.innerHTML = todayBatchKanji.map((item) => {
+        const isMastered = todayLearnedList.includes(item.id);
+        return `
+          <div onclick="openPracticeModal(${item.id})" class="bg-slate-900 border ${isMastered ? 'border-emerald-500/50 bg-emerald-950/10' : 'border-slate-800 hover:border-indigo-500/50'} rounded-2xl p-4 flex items-center justify-between cursor-pointer active:scale-98 transition shadow-lg">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-2xl ${isMastered ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300' : 'bg-slate-950 border border-slate-800 text-white'} flex items-center justify-center kanji-font text-3xl font-black shadow-inner">
+                ${item.char}
+              </div>
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-bold text-white">${item.koreanMean} <span class="text-indigo-400">${item.koreanSound}</span></span>
+                  <span class="text-[10px] px-2 py-0.5 rounded ${isMastered ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold' : 'bg-slate-800 text-slate-400'}">
+                    ${isMastered ? '<i class="fa-solid fa-check"></i> 완료' : item.strokes}
+                  </span>
+                </div>
+                <div class="text-[11px] text-slate-400 flex items-center gap-3">
+                  <span>音: <b class="text-cyan-300 kanji-font">${formatReadings(item.onyomi).split('/')[0]}</b></span>
+                  <span>訓: <b class="text-amber-300 kanji-font">${formatReadings(item.kunyomi).split('/')[0]}</b></span>
+                </div>
+              </div>
+            </div>
+            <div class="text-right">
+              <button class="px-3 py-1.5 rounded-xl ${isMastered ? 'bg-slate-800 text-emerald-400' : 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'} text-xs font-bold">
+                ${isMastered ? '복습 쓰기' : '쓰기 학습 <i class="fa-solid fa-chevron-right text-[10px] ml-0.5"></i>'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 🌟 쓰기 연습 캔버스 설정
+    const practiceCanvas = document.getElementById('practiceCanvas');
+    const practiceCtx = practiceCanvas.getContext('2d');
+    let isDrawingPractice = false;
+
+    practiceCtx.lineWidth = 12;
+    practiceCtx.lineCap = 'round';
+    practiceCtx.lineJoin = 'round';
+    practiceCtx.strokeStyle = '#6366f1';
+
+    function getPracticeCoords(e) {
+      const rect = practiceCanvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: (clientX - rect.left) * (practiceCanvas.width / rect.width),
+        y: (clientY - rect.top) * (practiceCanvas.height / rect.height)
+      };
+    }
+
+    practiceCanvas.addEventListener('mousedown', e => {
+      isDrawingPractice = true;
+      const p = getPracticeCoords(e);
+      practiceCtx.beginPath();
+      practiceCtx.moveTo(p.x, p.y);
+    });
+
+    practiceCanvas.addEventListener('mousemove', e => {
+      if (!isDrawingPractice) return;
+      const p = getPracticeCoords(e);
+      practiceCtx.lineTo(p.x, p.y);
+      practiceCtx.stroke();
+    });
+
+    window.addEventListener('mouseup', () => isDrawingPractice = false);
+
+    practiceCanvas.addEventListener('touchstart', e => {
+      isDrawingPractice = true;
+      const p = getPracticeCoords(e);
+      practiceCtx.beginPath();
+      practiceCtx.moveTo(p.x, p.y);
+      e.preventDefault();
+    }, { passive: false });
+
+    practiceCanvas.addEventListener('touchmove', e => {
+      if (!isDrawingPractice) return;
+      const p = getPracticeCoords(e);
+      practiceCtx.lineTo(p.x, p.y);
+      practiceCtx.stroke();
+      e.preventDefault();
+    }, { passive: false });
+
+    window.addEventListener('touchend', () => isDrawingPractice = false);
+
+    function clearPracticeCanvas() {
+      practiceCtx.clearRect(0, 0, practiceCanvas.width, practiceCanvas.height);
+    }
+
+    // 🌟 개별 한자 연습 모달 열기
+    function openPracticeModal(kanjiId) {
+      const item = kanjiList.find(k => k.id === kanjiId);
+      if (!item) return;
+
+      currentPracticeKanji = item;
+      practiceWriteCount = 0;
+      clearPracticeCanvas();
+
+      document.getElementById('practice-grade-tag').innerText = item.schoolLevel === 'custom' ? '⭐ 커스텀' : `${item.schoolLevel} 한자`;
+      document.getElementById('practice-strokes').innerText = item.strokes;
+      document.getElementById('practice-char').innerText = item.char;
+      document.getElementById('practice-watermark').innerText = item.char;
+      document.getElementById('practice-korean').innerHTML = `${item.koreanMean} <span class="text-indigo-400">${item.koreanSound}</span>`;
+      document.getElementById('practice-formula').innerText = item.formula;
+      
+      document.getElementById('practice-onyomi').innerText = formatReadings(item.onyomi);
+      document.getElementById('practice-kunyomi').innerText = formatReadings(item.kunyomi);
+
+      const isMastered = todayLearnedList.includes(item.id);
+      document.getElementById('btn-finish-text').innerText = isMastered ? '학습 완료 상태 유지 (닫기)' : '오늘 암기 완료 (학습 종료)';
+
+      updatePracticeWriteTracker();
+      document.getElementById('modal-practice-detail').classList.remove('hidden');
+    }
+
+    function closePracticeModal() {
+      document.getElementById('modal-practice-detail').classList.add('hidden');
+      renderTodayLearnGrid();
+    }
+
+    // 🌟 자유 쓰기 트래커 갱신
+    function updatePracticeWriteTracker() {
+      document.getElementById('write-count-current').innerText = practiceWriteCount;
+
+      const dotContainer = document.getElementById('write-dot-container');
+      let dotsHtml = '';
+      for (let i = 1; i <= 10; i++) {
+        if (i <= practiceWriteCount) {
+          dotsHtml += `<div class="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black text-[9px] flex items-center justify-center shadow-md shadow-emerald-500/20 transition-all">${i}</div>`;
+        } else {
+          dotsHtml += `<div class="w-5 h-5 rounded-full bg-slate-900 border border-slate-700 text-slate-500 font-bold text-[9px] flex items-center justify-center">${i}</div>`;
+        }
+      }
+      dotContainer.innerHTML = dotsHtml;
+    }
+
+    // 🌟 1회 쓰기 카운트 증가 (횟수 제한 없이 자유롭게 증가)
+    function countUpPracticeWrite() {
+      practiceWriteCount++;
+      clearPracticeCanvas();
+      updatePracticeWriteTracker();
+
+      if (practiceWriteCount === 10) {
+        playSoundEffect();
+      }
+    }
+
+    // 🌟 쓰기 카운트 리셋
+    function resetPracticeWriteCount() {
+      practiceWriteCount = 0;
+      clearPracticeCanvas();
+      updatePracticeWriteTracker();
+    }
+
+    // 🌟 원하는 시점에 언제든지 암기 완료(학습 종료)
+    function markPracticeAsMastered() {
+      if (!currentPracticeKanji) return;
+
+      if (!todayLearnedList.includes(currentPracticeKanji.id)) {
+        todayLearnedList.push(currentPracticeKanji.id);
+      }
+      currentPracticeKanji.mastered = true;
+
+      saveState();
+      closePracticeModal();
+    }
+
+    function playPracticeSound() {
+      if (!currentPracticeKanji) return;
+      if ('speechSynthesis' in window) {
+        const utter = new SpeechSynthesisUtterance(currentPracticeKanji.char);
+        utter.lang = 'ja-JP'; utter.rate = 0.8;
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
+    function playSoundEffect() {
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    }
+
+    // Promotion Test
+    const testCanvas = document.getElementById('testCanvas');
+    const testCtx = testCanvas.getContext('2d');
+    let isDrawingTest = false, testStrokes = [], curTX = [], curTY = [], curTT = [], tStart = 0;
+    testCtx.lineWidth = 14; testCtx.lineCap = 'round'; testCtx.lineJoin = 'round'; testCtx.strokeStyle = '#6366f1';
+
+    function getTestCoords(e) {
+      const rect = testCanvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: Math.round((clientX - rect.left) * (testCanvas.width / rect.width)), y: Math.round((clientY - rect.top) * (testCanvas.height / rect.height)) };
+    }
+    function startTDraw(e) {
+      isDrawingTest = true; const p = getTestCoords(e); testCtx.beginPath(); testCtx.moveTo(p.x, p.y);
+      const now = Date.now(); if (!tStart) tStart = now;
+      curTX = [p.x]; curTY = [p.y]; curTT = [now - tStart]; e.preventDefault();
+    }
+    function moveTDraw(e) {
+      if (!isDrawingTest) return; const p = getTestCoords(e); testCtx.lineTo(p.x, p.y); testCtx.stroke();
+      const now = Date.now(); curTX.push(p.x); curTY.push(p.y); curTT.push(now - tStart); e.preventDefault();
+    }
+    function endTDraw() {
+      if (!isDrawingTest) return; isDrawingTest = false;
+      if (curTX.length > 0) testStrokes.push([curTX, curTY, curTT]);
+    }
+    testCanvas.addEventListener('mousedown', startTDraw); testCanvas.addEventListener('mousemove', moveTDraw); window.addEventListener('mouseup', endTDraw);
+    testCanvas.addEventListener('touchstart', startTDraw, { passive: false }); testCanvas.addEventListener('touchmove', moveTDraw, { passive: false }); window.addEventListener('touchend', endTDraw);
+
+    function clearTestCanvas() { testCtx.clearRect(0, 0, testCanvas.width, testCanvas.height); testStrokes = []; tStart = 0; }
+
+    function startPromotionTestModal() {
+      switchTab('test');
+      const curIdx = GRADE_ORDER.indexOf(userCurrentGrade);
+      let currentGradePool = [];
+      
+      if (userCurrentGrade === '고등') {
+        currentGradePool = kanjiList.filter(k => k.schoolLevel === '고등/인명용' || k.schoolLevel === '인명/교양');
+      } else {
+        currentGradePool = kanjiList.filter(k => k.schoolLevel === userCurrentGrade);
+      }
+
+      let selectedCurrent = [...currentGradePool].sort(() => 0.5 - Math.random()).slice(0, 4);
+      let selectedPrev = [];
+      
+      const previousGradePool = kanjiList.filter(k => GRADE_ORDER.indexOf(k.schoolLevel) !== -1 && GRADE_ORDER.indexOf(k.schoolLevel) < curIdx);
+      if (previousGradePool.length > 0) {
+        selectedPrev = [...previousGradePool].sort(() => 0.5 - Math.random()).slice(0, 1).map(k => ({ ...k, isReview: true }));
+      }
+      testQuestions = [...selectedCurrent, ...selectedPrev].sort(() => 0.5 - Math.random());
+      if (testQuestions.length === 0) testQuestions = kanjiList.slice(0, 5);
+
+      currentTestQIndex = 0;
+      testScore = 0;
+      document.getElementById('test-current-grade').innerText = `${userCurrentGrade} 승급 시험`;
+      renderTestQuestion();
+    }
+
+    function renderTestQuestion() {
+      const q = testQuestions[currentTestQIndex];
+      clearTestCanvas();
+      document.getElementById('test-overlay').classList.add('hidden');
+      document.getElementById('test-loading').classList.add('hidden');
+
+      document.getElementById('test-q-progress').innerText = `${currentTestQIndex + 1} / ${testQuestions.length}`;
+      document.getElementById('test-source-badge').innerText = q.isReview ? '🔄 이전 단계 복습' : (q.schoolLevel === 'custom' ? '⭐ 커스텀 문제' : `${q.schoolLevel} 정규 문제`);
+      document.getElementById('test-source-badge').className = q.isReview ? 'text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300';
+      document.getElementById('test-prompt-title').innerText = `${q.koreanMean} ${q.koreanSound}`;
+      document.getElementById('test-prompt-context').innerHTML = q.quizContext;
+      document.getElementById('test-target-char').innerText = q.char;
+    }
+
+    async function gradeTestAnswer() {
+      if (testStrokes.length === 0) { alert("한자를 작성해주세요!"); return; }
+      const q = testQuestions[currentTestQIndex];
+      document.getElementById('test-loading').classList.remove('hidden');
+
+      try {
+        const payload = { input_type: "0", requests: [{ writing_guide: { writing_area_width: 300, writing_area_height: 300 }, ink: testStrokes, language: "ja" }] };
+        const res = await fetch('https://www.google.com.tw/inputtools/request?ime=handwriting&app=mobilesearch&cs=1&oe=UTF-8', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await res.json();
+        document.getElementById('test-loading').classList.add('hidden');
+        let candidates = [];
+        if (data[0] === 'SUCCESS' && data[1] && data[1][0] && data[1][0][1]) candidates = data[1][0][1];
+        const top = candidates[0] || "판독불가";
+        const isCorrect = candidates.slice(0, 3).includes(q.char);
+        handleTestEvaluation(isCorrect, top, q);
+      } catch (err) {
+        document.getElementById('test-loading').classList.add('hidden');
+        const fallback = testStrokes.length >= 3;
+        handleTestEvaluation(fallback, q.char, q);
+      }
+    }
+
+    function handleTestEvaluation(isCorrect, recognized, targetObj) {
+      const overlay = document.getElementById('test-overlay');
+      const icon = document.getElementById('test-overlay-icon');
+      const title = document.getElementById('test-overlay-title');
+      document.getElementById('test-recognized-char').innerText = recognized;
+
+      const dbTarget = kanjiList.find(k => k.id === targetObj.id);
+      if (isCorrect) {
+        testScore++;
+        icon.className = "w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-1 text-2xl";
+        icon.innerHTML = '<i class="fa-solid fa-check"></i>';
+        title.innerText = "정답입니다!";
+        title.className = "text-lg font-bold text-emerald-400 mb-0.5";
+      } else {
+        if (dbTarget) dbTarget.wrongCount = (dbTarget.wrongCount || 0) + 1;
+        saveState();
+        icon.className = "w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mb-1 text-2xl";
+        icon.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+        title.innerText = "오답입니다 (오답노트에 기록됨)";
+        title.className = "text-lg font-bold text-rose-400 mb-0.5";
+      }
+      overlay.classList.remove('hidden');
+    }
+
+    function nextTestQuestion() {
+      currentTestQIndex++;
+      if (currentTestQIndex < testQuestions.length) renderTestQuestion();
+      else finishPromotionTest();
+    }
+
+    function finishPromotionTest() {
+      const accuracy = (testScore / testQuestions.length) * 100;
+      if (accuracy >= 90) {
+        goldMedals++;
+        const curIdx = GRADE_ORDER.indexOf(userCurrentGrade);
+        if (curIdx !== -1 && curIdx < GRADE_ORDER.length - 1) {
+          userCurrentGrade = GRADE_ORDER[curIdx + 1];
+        }
+        saveState();
+        alert(`🎖️ 축하합니다! 정답률 ${Math.round(accuracy)}%로 금메달 획득!\n[${userCurrentGrade} 과정]으로 진급합니다! 🎉`);
+      } else {
+        alert(`정답률: ${Math.round(accuracy)}% (${testScore}/${testQuestions.length})\n90% 이상 득점해야 진급 및 금메달을 획득할 수 있습니다.`);
+      }
+      switchTab('mypage');
+    }
+
+    // Wrong Note
+    function renderWrongNote() {
+      const wrongList = kanjiList.filter(k => k.wrongCount > 0).sort((a, b) => b.wrongCount - a.wrongCount);
+      const container = document.getElementById('wrong-list-container');
+      const emptyState = document.getElementById('wrong-empty-state');
+      document.getElementById('wrong-count-badge').innerText = `${wrongList.length}개`;
+
+      if (wrongList.length === 0) {
+        emptyState.classList.remove('hidden');
+        container.innerHTML = '';
+        return;
+      }
+      emptyState.classList.add('hidden');
+      container.innerHTML = wrongList.map(item => `
+        <div class="bg-slate-900 border border-rose-500/30 rounded-2xl p-4 flex items-center justify-between">
+          <div class="flex items-center gap-3.5">
+            <div class="w-12 h-12 rounded-xl bg-rose-950/60 border border-rose-500/30 flex items-center justify-center kanji-font text-2xl font-black text-rose-300">
+              ${item.char}
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-white">${item.koreanMean} ${item.koreanSound}</span>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300">${item.wrongCount}회 오답</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5">${item.formula}</p>
+            </div>
+          </div>
+          <button onclick="clearWrongItem(${item.id})" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold transition">복습완료</button>
+        </div>
+      `).join('');
+    }
+
+    function clearWrongItem(id) {
+      const target = kanjiList.find(k => k.id === id);
+      if (target) {
+        target.wrongCount = 0;
+        saveState();
+        renderWrongNote();
+      }
+    }
+
+    // 도감 탭
+    function selectMainCategory(cat) {
+      currentMainCategory = cat;
+
+      ['elementary', 'secondary', 'high', 'jlpt', 'more'].forEach(c => {
+        const btn = document.getElementById(`cat-${c}`);
+        if (btn) {
+          if (c === cat) btn.className = "drag-item px-4 py-2 rounded-xl font-bold bg-indigo-600 text-white border border-indigo-500 shadow-lg shadow-indigo-600/20 transition";
+          else btn.className = "drag-item px-4 py-2 rounded-xl font-bold bg-slate-900 text-slate-400 border border-slate-800 transition";
+        }
+      });
+
+      const elemSub = document.getElementById('sub-tabs-elementary');
+      const secSub = document.getElementById('sub-tabs-secondary');
+      const jlptSub = document.getElementById('sub-tabs-jlpt');
+      const moreSub = document.getElementById('sub-tabs-more');
+
+      elemSub.classList.add('hidden');
+      secSub.classList.add('hidden');
+      jlptSub.classList.add('hidden');
+      moreSub.classList.add('hidden');
+
+      if (cat === 'elementary') {
+        elemSub.classList.remove('hidden');
+        selectSubFilter('초등전체');
+      } else if (cat === 'secondary') {
+        secSub.classList.remove('hidden');
+        selectSubFilter('중등전체');
+      } else if (cat === 'high') {
+        currentSubFilter = 'high';
+        renderCollectionGrid();
+      } else if (cat === 'jlpt') {
+        jlptSub.classList.remove('hidden');
+        selectSubFilter('jlpt전체');
+      } else if (cat === 'more') {
+        moreSub.classList.remove('hidden');
+        selectSubFilter('all');
+      }
+    }
+
+    function selectSubFilter(sub) {
+      currentSubFilter = sub;
+
+      const updateSubGroup = (keys, prefix, allName) => {
+        keys.forEach(k => {
+          const btn = document.getElementById(`${prefix}-${k}`);
+          const isActive = (k === 'all' && sub === allName) || (k === sub);
+          if (btn) {
+            if (isActive) btn.className = "drag-item px-3.5 py-1.5 rounded-xl font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40";
+            else btn.className = "drag-item px-3.5 py-1.5 rounded-xl font-semibold bg-slate-900 text-slate-400 border border-slate-800";
+          }
+        });
+      };
+
+      if (currentMainCategory === 'elementary') {
+        updateSubGroup(['all', '초1', '초2', '초3', '초4', '초5', '초6'], 'sub-elem', '초등전체');
+      } else if (currentMainCategory === 'secondary') {
+        updateSubGroup(['all', '중1', '중2', '중3'], 'sub-sec', '중등전체');
+      } else if (currentMainCategory === 'jlpt') {
+        updateSubGroup(['all', 'N5', 'N4', 'N3', 'N2', 'N1'], 'sub-jlpt', 'jlpt전체');
+      } else if (currentMainCategory === 'more') {
+        updateSubGroup(['all', 'advanced', 'custom'], 'sub-more', 'all');
+      }
+
+      renderCollectionGrid();
+    }
+
+    function onCollectionSearch(query) {
+      searchQuery = query.trim().toLowerCase();
+      renderCollectionGrid();
+    }
+
+    function renderCollectionGrid() {
+      const grid = document.getElementById('collection-grid');
+      if (!grid) return;
+
+      let filtered = kanjiList;
+
+      if (currentMainCategory === 'elementary') {
+        if (currentSubFilter === '초등전체') filtered = filtered.filter(k => (k.schoolLevel || '').startsWith('초'));
+        else filtered = filtered.filter(k => k.schoolLevel === currentSubFilter);
+      } else if (currentMainCategory === 'secondary') {
+        if (currentSubFilter === '중등전체') filtered = filtered.filter(k => (k.schoolLevel || '').startsWith('중'));
+        else filtered = filtered.filter(k => k.schoolLevel === currentSubFilter);
+      } else if (currentMainCategory === 'high') {
+        filtered = filtered.filter(k => k.schoolLevel === '고등/인명용' || k.schoolLevel === '인명/교양' || k.schoolLevel === '고등');
+      } else if (currentMainCategory === 'jlpt') {
+        if (currentSubFilter === 'jlpt전체') filtered = filtered.filter(k => k.jlpt !== null && k.jlpt !== undefined);
+        else filtered = filtered.filter(k => k.jlpt && k.jlpt.replace(/\s+/g, '').includes(currentSubFilter));
+      } else if (currentMainCategory === 'more') {
+        if (currentSubFilter === 'advanced') filtered = filtered.filter(k => k.schoolLevel === '고난도' || !k.schoolLevel);
+        else if (currentSubFilter === 'custom') filtered = filtered.filter(k => k.schoolLevel === 'custom');
+      }
+
+      if (searchQuery) {
+        filtered = filtered.filter(k => {
+          const char = (k.char || '').toLowerCase();
+          const mean = (k.koreanMean || '').toLowerCase();
+          const sound = (k.koreanSound || '').toLowerCase();
+          const onyomi = (Array.isArray(k.onyomi) ? k.onyomi.join(' ') : (k.onyomi || '')).toLowerCase();
+          const kunyomi = (Array.isArray(k.kunyomi) ? k.kunyomi.join(' ') : (k.kunyomi || '')).toLowerCase();
+          return char.includes(searchQuery) || mean.includes(searchQuery) || sound.includes(searchQuery) || onyomi.includes(searchQuery) || kunyomi.includes(searchQuery);
+        });
+      }
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `<div class="col-span-2 text-center py-10 text-slate-500 text-xs">일치하는 한자가 없습니다.</div>`;
+        return;
+      }
+
+      const displayItems = filtered.slice(0, 300);
+
+      grid.innerHTML = displayItems.map(k => `
+        <div onclick="openPracticeModal(${k.id})" class="bg-slate-900 border ${k.mastered ? 'border-emerald-500/40' : 'border-slate-800'} rounded-2xl p-4 relative flex flex-col justify-between hover:border-indigo-500/50 cursor-pointer transition">
+          <div class="flex justify-between items-start">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded ${k.schoolLevel === 'custom' ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400'}">
+              ${k.jlpt ? k.jlpt + ' • ' : ''}${k.schoolLevel === 'custom' ? '⭐ 커스텀' : (k.schoolLevel || '고난도')}
+            </span>
+            ${k.wrongCount > 0 ? `<span class="text-[10px] text-rose-400 font-bold"><i class="fa-solid fa-triangle-exclamation"></i> ${k.wrongCount}</span>` : ''}
+          </div>
+          <div class="my-2 text-center">
+            <div class="kanji-font text-5xl font-black text-white">${k.char}</div>
+            <div class="text-xs font-bold text-slate-300 mt-1">${k.koreanMean} ${k.koreanSound}</div>
+          </div>
+          <div class="text-[11px] text-slate-400 border-t border-slate-800/80 pt-2 flex justify-between">
+            <span class="text-cyan-400 kanji-font">${formatReadings(k.onyomi)}</span>
+            <span class="text-amber-400 kanji-font">${formatReadings(k.kunyomi)}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 스마트 진단 풀
+    const levelTestPool = [
+      { gradeLabel: "초1", char: "休", koreanMean: "쉴", koreanSound: "휴", sentence: "「오늘은 천천히 休 니다」", choices: ["쉴 휴", "밝을 명", "나무 목", "말씀 어"], correct: 0 },
+      { gradeLabel: "초2", char: "明", koreanMean: "밝을", koreanSound: "명", sentence: "「방이 매우 明 습니다」", choices: ["어두울 암", "쉴 휴", "밝을 명", "번개 전"], correct: 2 },
+      { gradeLabel: "초3", char: "語", koreanMean: "말씀/언어", koreanSound: "어", sentence: "「일본 語 를 공부합니다」", choices: ["말씀 어", "이야기 화", "글월 서", "약 약"], correct: 0 },
+      { gradeLabel: "초4", char: "愛", koreanMean: "사랑", koreanSound: "애", sentence: "「가족을 愛 합니다」", choices: ["사모할 련", "사랑 애", "꿈 몽", "빛 광"], correct: 1 },
+      { gradeLabel: "중1", char: "鬱", koreanMean: "답답할/울창할", koreanSound: "울", sentence: "「鬱 창한 숲」", choices: ["나무빽빽할 삼", "답답할 울", "벌일 라", "용 룡"], correct: 1 },
+      { gradeLabel: "중2", char: "羅", koreanMean: "벌일/그물", koreanSound: "라", sentence: "「羅 열된 단어」", choices: ["벌일 라", "학 학", "물고기 어", "새 조"], correct: 0 }
+    ];
+    let ltIndex = 0, ltGradeScores = { "초등": { correct: 0, total: 0 }, "중등": { correct: 0, total: 0 } };
+
+    function startLevelTest() {
+      ltIndex = 0; ltGradeScores = { "초등": { correct: 0, total: 0 }, "중등": { correct: 0, total: 0 } };
+      switchTab('leveltest');
+      renderLevelTestQuestion();
+    }
+
+    function renderLevelTestQuestion() {
+      const q = levelTestPool[ltIndex];
+      document.getElementById('lt-grade-label').innerText = `${q.gradeLabel} 수준 진단 중`;
+      document.getElementById('lt-progress-text').innerText = `${ltIndex + 1} / ${levelTestPool.length}`;
+      document.getElementById('lt-kanji-display').innerText = q.char;
+      document.getElementById('lt-example-sentence').innerText = q.sentence;
+      const container = document.getElementById('lt-choices-container');
+      container.innerHTML = q.choices.map((c, i) => `
+        <button onclick="submitLevelTestAnswer(${i})" class="w-full p-3.5 bg-slate-950/70 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/60 rounded-2xl text-xs font-bold text-slate-200 flex items-center justify-between transition active:scale-98">
+          <span>${i + 1}. ${c}</span>
+          <i class="fa-solid fa-chevron-right text-slate-600 text-[10px]"></i>
+        </button>
+      `).join('');
+    }
+
+    function submitLevelTestAnswer(choiceIndex) {
+      const q = levelTestPool[ltIndex];
+      const category = q.gradeLabel.startsWith('초') ? '초등' : '중등';
+      ltGradeScores[category].total++;
+      if (choiceIndex === q.correct) ltGradeScores[category].correct++;
+      ltIndex++;
+      if (ltIndex < levelTestPool.length) renderLevelTestQuestion();
+      else calculateDiagnosedLevel();
+    }
+
+    function calculateDiagnosedLevel() {
+      const rElementary = (ltGradeScores['초등'].correct / ltGradeScores['초등'].total) * 100;
+      const rMiddle = (ltGradeScores['중등'].correct / ltGradeScores['중등'].total) * 100;
+      
+      let matchedGrade = '초1';
+      if (rElementary >= 75 && rMiddle >= 50) matchedGrade = '중1';
+      else if (rElementary >= 75) matchedGrade = '초4';
+      else if (rElementary >= 50) matchedGrade = '초2';
+      else matchedGrade = '초1';
+
+      userCurrentGrade = matchedGrade;
+      saveState();
+      alert(`📊 진단 결과:\n• 초등 정답률: ${Math.round(rElementary)}%\n• 중등 정답률: ${Math.round(rMiddle)}%\n\n🎯 당신에게 알맞은 시작 단계인 [${matchedGrade} 과정]부터 학습을 시작합니다!`);
+      switchTab('learn');
+    }
+
+    function skipLevelTest(defaultGrade = '초1') {
+      userCurrentGrade = defaultGrade;
+      saveState();
+      switchTab('learn');
+    }
+
+    function openSmartAddModal() {
+      document.getElementById('modal-smart-add').classList.remove('hidden');
+      document.getElementById('search-status-box').classList.add('hidden');
+    }
+    function closeSmartAddModal() { document.getElementById('modal-smart-add').classList.add('hidden'); }
+
+    async function searchKanjiFromServer() {
+      const char = document.getElementById('quick-search-input').value.trim();
+      const statusBox = document.getElementById('search-status-box');
+      const statusText = document.getElementById('search-status-text');
+
+      if (!char) { alert("한자 1글자를 입력해주세요!"); return; }
+
+      statusBox.classList.remove('hidden');
+      statusText.className = "text-xs text-indigo-400 font-medium";
+      statusText.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> JIS DB 조회 중...`;
+
+      try {
+        const response = await fetch(`http://localhost:3000/api/kanji/${encodeURIComponent(char)}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            statusText.className = "text-xs text-emerald-400 font-bold";
+            statusText.innerHTML = `✅ 매핑 완료! (뜻: ${data.koreanMean} / 음: ${data.koreanSound})`;
+            document.getElementById('input-mean').value = data.koreanMean || '';
+            document.getElementById('input-sound').value = data.koreanSound || '';
+            document.getElementById('input-onyomi').value = formatReadings(data.onyomi);
+            document.getElementById('input-kunyomi').value = formatReadings(data.kunyomi);
+            document.getElementById('input-strokes').value = data.strokes || '';
+            document.getElementById('input-formula').value = data.formula || '';
+            return;
+          }
+        }
+      } catch (err) {}
+
+      statusText.className = "text-xs text-rose-400 font-medium";
+      statusText.innerHTML = `⚠️ 사전에 없는 한자입니다. 직접 입력할 수 있습니다.`;
+    }
+
+    function saveSmartKanji() {
+      const char = document.getElementById('quick-search-input').value.trim();
+      const mean = document.getElementById('input-mean').value.trim();
+      const sound = document.getElementById('input-sound').value.trim();
+      const strokes = document.getElementById('input-strokes').value.trim() || '커스텀';
+      const formula = document.getElementById('input-formula').value.trim();
+      const rawOnyomi = document.getElementById('input-onyomi').value.trim();
+      const rawKunyomi = document.getElementById('input-kunyomi').value.trim();
+      const context = document.getElementById('input-context').value.trim() || `「${char}」`;
+
+      if (!char || !mean) { alert("한자와 한국어 뜻을 입력해주세요!"); return; }
+
+      const onyomiArr = rawOnyomi && rawOnyomi !== '-' ? rawOnyomi.split(/[\s/]+/).filter(Boolean) : [];
+      const kunyomiArr = rawKunyomi && rawKunyomi !== '-' ? rawKunyomi.split(/[\s/]+/).filter(Boolean) : [];
+
+      const newKanji = {
+        id: Date.now(),
+        schoolLevel: 'custom',
+        char: char,
+        strokes: strokes,
+        koreanMean: mean,
+        koreanSound: sound || "-",
+        formula: formula || (mean ? `한국어 훈음: ${mean} ${sound}` : "사전 등록 한자"),
+        onyomi: onyomiArr,
+        onyomiEx: "-",
+        kunyomi: kunyomiArr,
+        kunyomiEx: "-",
+        quizContext: context,
+        wrongCount: 0,
+        mastered: false
+      };
+
+      customKanjiList.push(newKanji);
+      kanjiList.push(newKanji);
+      saveState();
+      closeSmartAddModal();
+      alert(`「${char}」 한자가 나만의 단어장에 저장되었습니다!`);
+      renderCollectionGrid();
+      refreshTodayBatch();
+    }
+
+    // 초기 실행
+    updateHeaderBadges();
+    checkAppInit();
+    initAllDragScrolls();
+    loadMasterDB();
+  </script>
+</body>
+</html>
